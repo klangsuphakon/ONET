@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMART O-NET ม.3 ปี 2568</title>
+<link rel="stylesheet" href="onet.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>SMART O-NET ม.3 | ปีการศึกษา 2568</h1>
+    <div class="sub">ข้อสอบจริงตาม PDF ต้นฉบับ 4 วิชา • กระดาษคำตอบตามรูปแบบ สทศ.</div>
+  </div>
+</header>
+
+<main>
+<div id="fatal" class="msg err" hidden></div>
+<section id="studentView">
+  <div class="panel controls">
+    <div class="bar">
+      <label>ชื่อ-นามสกุล <input id="student" autocomplete="off" placeholder="ชื่อ-นามสกุล"></label>
+      <label>เลขที่ <input id="no" size="4" inputmode="numeric" autocomplete="off"></label>
+      <label>ห้อง <input id="room" size="7" placeholder="ม.3/1" autocomplete="off"></label>
+      <label>วิชา <select id="subject"></select></label>
+    </div>
+    <p class="bar">
+      <button id="prev">◀ หน้าก่อน</button>
+      <strong id="pageNo"></strong>
+      <button id="next">หน้าถัดไป ▶</button>
+      <label>ขนาดภาพ <input type="range" id="zoom" min="50" max="200" step="10" value="100"></label>
+      <button class="secondary" id="newStudent">เริ่มนักเรียนคนใหม่</button>
+    </p>
+    <small id="pageInfo"></small>
+    <div id="error" class="msg err" hidden></div>
+  </div>
+
+  <div class="layout">
+    <section class="panel">
+      <div class="examwrap"><img id="exam" alt="หน้าข้อสอบจริง"></div>
+      <p id="foot" class="muted"></p>
+    </section>
+    <aside class="panel">
+      <div class="qhead"><h3 id="qTitle" style="margin:0"></h3><small id="qMeta"></small></div>
+      <div id="qHint" class="hint"></div>
+      <div id="answer"></div>
+      <div class="bar">
+        <button class="secondary" id="qPrev">◀ ข้อก่อน</button>
+        <button class="secondary" id="qNext">ข้อถัดไป ▶</button>
+        <button class="danger" id="clear">ล้างข้อนี้</button>
+      </div>
+      <div id="grid" class="grid" aria-label="ภาพรวมกระดาษคำตอบ"></div>
+      <p id="progress"></p>
+      <button class="okb" id="submit" style="width:100%">ส่งคำตอบวิชานี้</button>
+      <div id="submitMsg"></div>
+      <p><small>เลือกข้อแล้วภาพจะเปิดหน้าของข้อนั้นให้อัตโนมัติ • กดแป้น 1–5 เพื่อตอบข้อแบบเลือก 1 คำตอบ • ← / → เปลี่ยนข้อ • สีเหลือง = ตอบยังไม่ครบ • คำตอบบันทึกในเครื่องนี้อัตโนมัติจนกว่าจะกดส่ง</small></p>
+    </aside>
+  </div>
+</section>
+</main>
+<div id="toast" class="toast" role="status"></div>
+
+<script src="onet-core.js"></script>
+<script>
+if(typeof data==='undefined'){document.body.innerHTML='<p style="padding:20px;color:#b91c1c;font:bold 18px Tahoma">ไม่พบไฟล์ onet-core.js กรุณาแตกไฟล์ ZIP ทั้งหมด แล้วเปิด index.html จากในโฟลเดอร์เดียวกัน</p>';throw new Error('core missing')}
+if(!storageOK()){el('fatal').hidden=false;el('fatal').textContent='เบราว์เซอร์นี้บันทึกข้อมูลไม่ได้ (อาจเปิดโหมดไม่ระบุตัวตน) คำตอบจะไม่ถูกเก็บในเครื่อง — หลังส่งให้กดดาวน์โหลดไฟล์คำตอบแล้วส่งให้ครู'}
+
+const draft=load(LS.draft,null);
+let info=Object.assign({name:'',no:'',room:''},draft?.info);
+let answers=data.map((d,i)=>Array.from({length:d.count},(_,j)=>String(draft?.answers?.[i]?.[j]??'')));
+let s=0,p=0,q=0;
+function saveDraft(){store(LS.draft,{info,answers})}
+
+const isSubmitted=si=>!!info.name.trim()&&subs.some(x=>x.subject===data[si].name&&studentKey(x)===studentKey(info));
+function drawSubjects(){const sel=el('subject');sel.innerHTML='';
+  data.forEach((d,i)=>sel.add(new Option(d.name+' ('+d.count+' ข้อ)'+(isSubmitted(i)?' ✓ ส่งแล้ว':''),i)));sel.value=s}
+function drawExam(){
+  const d=data[s],img=el('exam'),f=pageFile(d,p);el('error').hidden=true;
+  img.onerror=()=>{el('error').hidden=false;el('error').textContent='ไม่พบไฟล์ภาพข้อสอบ '+f+' กรุณาแตกไฟล์ ZIP ทั้งหมด แล้วเปิด index.html จากในโฟลเดอร์เดียวกับโฟลเดอร์ภาพ'};
+  img.src=f;img.style.width=el('zoom').value+'%';
+  el('pageNo').textContent=(p===0?'หน้าปก':'หน้าข้อสอบ '+(p+1))+' / '+d.pages;
+  el('prev').disabled=p===0;el('next').disabled=p===d.pages-1;
+  const onPage=d.qs.map((x,i)=>x.page===p+1?i+1:0).filter(Boolean);
+  el('pageInfo').textContent=onPage.length?'หน้านี้มีข้อ '+(onPage.length>1?onPage[0]+'–'+onPage.at(-1):onPage[0]):(p===0?'อ่านคำชี้แจงแล้วกดหน้าถัดไป':'หน้านี้เป็นบทอ่าน/ข้อมูลประกอบ');
+  el('foot').textContent='ต้นฉบับ สทศ. ปีการศึกษา 2568 · '+d.name+' (คะแนนเต็ม '+d.full+')';
+  el('exam').parentElement.scrollTop=0;
+}
+function btn(text,on,fn,label){const b=document.createElement('button');b.textContent=text;b.className=on?'active':'';b.setAttribute('aria-pressed',on);if(label)b.setAttribute('aria-label',label);b.onclick=fn;return b}
+function drawQuestion(){
+  const d=data[s],qq=d.qs[q],a=answers[s][q],box=el('answer');
+  el('qTitle').textContent='ข้อ '+(q+1)+' / '+d.count;el('qMeta').textContent=typeName(qq)+' · '+fmt(qq.pts)+' คะแนน';
+  el('qHint').textContent=qq.hint||'เลือก 1 คำตอบที่ถูกที่สุด';box.innerHTML='';
+  if(qq.t==='c'){box.className='choices';for(let i=1;i<=qq.n;i++)box.append(btn(i,a===String(i),()=>setAns(String(i))))}
+  else if(qq.t==='p2'){box.className='choices';const sel=new Set(a);
+    for(let i=1;i<=qq.n;i++)box.append(btn(i,sel.has(String(i)),()=>{const v=String(i);
+      if(sel.has(v))sel.delete(v);else{if(sel.size>=2){toast('เลือกได้ 2 คำตอบ — กดคำตอบเดิมเพื่อยกเลิกก่อน');return}sel.add(v)}
+      setAns([...sel].sort().join(''))}))}
+  else if(qq.t==='num'){box.className='choices';const inp=document.createElement('input');inp.inputMode='decimal';inp.placeholder='พิมพ์ตัวเลข';inp.value=a;inp.setAttribute('aria-label','คำตอบข้อ '+(q+1));
+    inp.oninput=()=>{const v=inp.value.replace(/[^\d.\-]/g,'');if(v!==inp.value)inp.value=v;answers[s][q]=v;saveDraft();drawGrid()};box.append(inp)}
+  else{box.className='subs';qq.subs.forEach((lab,k)=>{const row=document.createElement('div');row.className='subrow';row.style.setProperty('--n',qq.opts.length);
+    const sp=document.createElement('span');sp.textContent=lab;row.append(sp);
+    qq.opts.forEach((o,j)=>row.append(btn(o,mGet(a,k)===String(j+1),()=>setAns(mSet(answers[s][q],k,mGet(answers[s][q],k)===String(j+1)?'':String(j+1),qq.subs.length)),lab+' '+o)));box.append(row)})}
+  el('qPrev').disabled=q===0;el('qNext').disabled=q===d.count-1;drawGrid();
+}
+function drawGrid(){
+  const g=el('grid'),d=data[s];g.innerHTML='';
+  answers[s].forEach((a,i)=>{const st=state(d.qs[i],a),b=document.createElement('button');b.textContent=(i+1)+(st==='done'?' ✓':'');
+    b.className=st+(i===q?' cur':'');b.title='ข้อ '+(i+1)+(st?' ตอบ '+showAns(d.qs[i],a):' ยังไม่ตอบ');b.onclick=()=>go(i);g.append(b)});
+  const done=answers[s].filter((a,i)=>state(d.qs[i],a)==='done').length,part=answers[s].filter((a,i)=>state(d.qs[i],a)==='part').length;
+  el('progress').textContent='ตอบครบแล้ว '+done+' / '+d.count+' ข้อ'+(part?' · ตอบไม่ครบ '+part+' ข้อ':'');
+}
+function setAns(v){answers[s][q]=v;saveDraft();drawQuestion()}
+function go(i){q=Math.max(0,Math.min(data[s].count-1,i));const pg=data[s].qs[q].page-1;if(pg!==p){p=pg;drawExam()}drawQuestion()}
+function turnPage(dp){p+=dp;drawExam();const d=data[s];if(d.qs[q].page!==p+1){const i=d.qs.findIndex(x=>x.page===p+1);if(i>=0){q=i;drawQuestion()}}}
+function drawStudent(){drawSubjects();drawExam();drawQuestion()}
+function showSubmit(type,html){el('submitMsg').innerHTML=html?'<div class="msg '+type+'">'+html+'</div>':''}
+
+['student','no','room'].forEach((id,i)=>{const f=['name','no','room'][i];el(id).value=info[f];
+  el(id).oninput=()=>{info[f]=el(id).value;saveDraft();drawSubjects()}});
+el('subject').onchange=()=>{s=+el('subject').value;p=0;q=0;showSubmit();drawStudent()};
+el('prev').onclick=()=>turnPage(-1);el('next').onclick=()=>turnPage(1);
+el('zoom').oninput=()=>el('exam').style.width=el('zoom').value+'%';
+el('qPrev').onclick=()=>go(q-1);el('qNext').onclick=()=>go(q+1);
+el('clear').onclick=()=>setAns('');
+el('newStudent').onclick=()=>{
+  if(!confirm('เริ่มนักเรียนคนใหม่?\nคำตอบที่ยังไม่ได้กดส่งของคนปัจจุบันจะถูกล้าง (คำตอบที่ส่งแล้วยังอยู่ในระบบ)'))return;
+  info={name:'',no:'',room:info.room};answers=data.map(d=>Array(d.count).fill(''));s=p=q=0;
+  el('student').value='';el('no').value='';el('room').value=info.room;saveDraft();showSubmit();drawStudent();el('student').focus();
+};
+el('submit').onclick=()=>{
+  if(!info.name.trim()||!info.room.trim()){showSubmit('err','กรุณากรอกชื่อ-นามสกุลและห้องก่อนส่ง');el(info.name.trim()?'room':'student').focus();return}
+  const d=data[s],blank=answers[s].filter((a,i)=>state(d.qs[i],a)!=='done').length;
+  if(!confirm('ส่งคำตอบวิชา'+d.name+'\nชื่อ: '+info.name+'  เลขที่: '+(info.no||'-')+'  ห้อง: '+info.room+(blank?'\n\nยังตอบไม่ครบ '+blank+' ข้อ':'')+'\n\nยืนยันการส่ง?'))return;
+  subs=load(LS.subs,[]);
+  if(isSubmitted(s)&&!confirm('เคยส่งวิชานี้แล้ว ต้องการส่งใหม่แทนของเดิมหรือไม่?'))return;
+  const sub={name:info.name.trim(),no:String(info.no).trim(),room:info.room.trim(),subject:d.name,answers:answers[s].map(a=>String(a).trim()),time:new Date().toISOString()};
+  subs=subs.filter(x=>!(x.subject===sub.subject&&studentKey(x)===studentKey(sub)));subs.push(sub);
+  if(!store(LS.subs,subs)){showSubmit('err','บันทึกไม่สำเร็จ กรุณากดดาวน์โหลดไฟล์คำตอบแล้วส่งให้ครู<br><button class="secondary" id="dlMine">ดาวน์โหลดไฟล์คำตอบ</button>');el('dlMine').onclick=()=>downloadMine(sub);return}
+  let html='ส่งคำตอบวิชา'+esc(d.name)+' เรียบร้อยแล้ว';
+  if(settings.showScore){keyData=load(LS.key,{});const g=grade(s,sub.answers);if(g.g)html+='<br><strong>คะแนน '+fmt(g.pts)+' / '+fmt(g.full)+'</strong>'}
+  html+='<div class="bar" style="margin-top:6px"><button class="secondary" id="dlMine">ดาวน์โหลดไฟล์คำตอบ (CSV)</button></div><small>ใช้ไฟล์นี้เมื่อสอบคนละเครื่องกับเครื่องของครู</small>';
+  showSubmit('ok',html);el('dlMine').onclick=()=>downloadMine(sub);drawSubjects();
+};
+function downloadMine(sub){
+  const mine=subs.filter(x=>studentKey(x)===studentKey(sub));if(!mine.length)mine.push(sub);
+  download('SMART_ONET_2568_'+safe(sub.room)+'_'+safe(sub.no||'0')+'_'+safe(sub.name)+'.csv',toCSV(answerRows(mine)),'text/csv;charset=utf-8');
+}
+document.addEventListener('keydown',e=>{
+  if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)||e.ctrlKey||e.metaKey||e.altKey)return;
+  const qq=data[s].qs[q];
+  if(/^[1-5]$/.test(e.key)&&qq.t==='c'&&+e.key<=qq.n){setAns(e.key);e.preventDefault()}
+  else if(e.key==='ArrowRight'){go(q+1);e.preventDefault()}
+  else if(e.key==='ArrowLeft'){go(q-1);e.preventDefault()}
+});
+/* รับการเปลี่ยนแปลงจากหน้าครู (เช่น ครูลบข้อมูล หรือเปิด/ปิดการแสดงคะแนน) */
+window.addEventListener('storage',e=>{if(e.key===LS.subs){subs=load(LS.subs,[]);drawSubjects()}
+  else if(e.key===LS.set)settings=loadSettings();else if(e.key===LS.key)keyData=load(LS.key,{})});
+
+drawStudent();
+</script>
+</body>
+</html>

@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SMART O-NET 2568 · หน้าครู</title>
+<link rel="stylesheet" href="onet.css">
+<style>
+header{background:#0f3d2e}
+.conn{display:flex;align-items:center;gap:8px;font-size:14px}
+.dot{width:10px;height:10px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 3px #4ade8044}
+.dot.off{background:#f87171;box-shadow:0 0 0 3px #f8717144}
+.loginbox{max-width:420px;margin:40px auto}
+.loginbox input{width:100%;font-size:20px;text-align:center;letter-spacing:4px}
+.loginbox button{width:100%;margin-top:8px}
+.live{animation:flash 1.2s}
+@keyframes flash{from{background:#dcfce7}to{background:transparent}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>SMART O-NET ม.3 2568 · หน้าครู</h1>
+    <div class="sub">จัดการเฉลย คะแนน และข้อมูลนักเรียน</div>
+  </div>
+  <div class="conn noprint" id="conn" hidden><span class="dot" id="dot"></span><span id="connText"></span></div>
+</header>
+
+<main>
+<!-- ตั้งรหัสครั้งแรก / เข้าสู่ระบบ -->
+<div id="login" class="panel loginbox">
+  <h2 id="loginTitle">เข้าสู่ระบบครู</h2>
+  <p id="loginDesc"><small>กรอกรหัสครูเพื่อจัดการคะแนนและเฉลย</small></p>
+  <input id="pin" type="password" placeholder="รหัสครู" autocomplete="off">
+  <input id="pinConfirm" type="password" placeholder="ยืนยันรหัสอีกครั้ง" autocomplete="new-password" hidden style="margin-top:8px">
+  <button id="loginBtn">เข้าสู่ระบบ</button>
+  <div id="loginErr"></div>
+  <p><small>หน้านี้ใช้คู่กับหน้าสอบนักเรียน (index.html) ในโฟลเดอร์เดียวกัน ข้อมูลที่นักเรียนส่งในเครื่องนี้จะแสดงที่นี่ทันที</small></p>
+</div>
+
+<div id="teacher" hidden>
+  <div class="tabs">
+    <button data-tab="sum" class="on">สรุปคะแนน</button>
+    <button data-tab="key">เฉลย</button>
+    <button data-tab="item">วิเคราะห์รายข้อ</button>
+    <button data-tab="data">นำเข้า / ส่งออก</button>
+    <button data-tab="set">ตั้งค่า</button>
+    <a href="index.html" target="_blank" rel="noopener"><button class="secondary" type="button">เปิดหน้าสอบนักเรียน ↗</button></a>
+    <button class="danger" id="logout">ออกจากระบบ</button>
+  </div>
+
+  <div id="tab-sum" class="panel">
+    <h2>สรุปคะแนนนักเรียน</h2>
+    <div class="bar noprint">
+      <label>ห้อง <select id="sumRoom"></select></label>
+      <label>ค้นหา <input id="sumSearch" placeholder="ชื่อหรือเลขที่"></label>
+      <label>เรียงตาม
+        <select id="sumSort">
+          <option value="room">ห้อง / เลขที่</option>
+          <option value="avg">คะแนนเฉลี่ย มาก → น้อย</option>
+          <option value="name">ชื่อ</option>
+        </select>
+      </label>
+      <button class="secondary" id="sumCsv">ส่งออกตารางคะแนน (CSV)</button>
+      <button class="secondary" onclick="print()">พิมพ์</button>
+    </div>
+    <div id="sumStats" class="stats"></div>
+    <div id="keyWarn"></div>
+    <div class="tablewrap"><table id="sumTable"></table></div>
+    <div id="detail"></div>
+  </div>
+
+  <div id="tab-key" class="panel" hidden>
+    <h2>เฉลยข้อสอบ</h2>
+    <div class="msg info">กด <b>นำเข้าเฉลย</b> แล้วเลือกไฟล์ <b>SMART_ONET_2568_เฉลย.json</b> (เก็บไฟล์นี้ไว้ที่ครู ไม่ต้องคัดลอกลงเครื่องนักเรียน)</div>
+    <div class="bar">
+      <label>วิชา <select id="keySubject"></select></label>
+      <strong id="keyCount"></strong>
+      <button id="keyImportBtn" type="button">นำเข้าเฉลย</button>
+      <input type="file" id="keyImport" accept=".json" hidden>
+      <button class="secondary" id="keyExport">ส่งออกเฉลย</button>
+    </div>
+    <p><small>แก้เฉลยได้ในตาราง ระบบตรวจใหม่ทันที • ข้อย่อย: พิมพ์คำตอบเรียงกัน เช่น <code>2212</code> (1 = ใช่, 2 = ไม่ใช่) หรือ <code>DABCFE</code> • เลือก 2 คำตอบ: เช่น <code>45</code> • ถ้าถูกได้หลายแบบให้คั่นด้วย | • ข้อที่เว้นว่างจะไม่นำมาคิดคะแนน</small></p>
+    <div class="tablewrap"><table id="keyTable"></table></div>
+  </div>
+
+  <div id="tab-item" class="panel" hidden>
+    <h2>วิเคราะห์รายข้อ</h2>
+    <div class="bar">
+      <label>วิชา <select id="itemSubject"></select></label>
+      <label>ห้อง <select id="itemRoom"></select></label>
+    </div>
+    <div id="itemOut"></div>
+  </div>
+
+  <div id="tab-data" class="panel" hidden>
+    <h2>นำเข้า / ส่งออกข้อมูล</h2>
+    <h3>รวมคะแนนจากเครื่องอื่น</h3>
+    <p><small>นักเรียนที่สอบในเครื่องนี้ คะแนนเข้าระบบเองทันที ส่วนเครื่องอื่น ให้นักเรียนกด "ดาวน์โหลดไฟล์คำตอบ" หลังส่ง แล้วนำไฟล์ CSV ทั้งหมดมานำเข้าที่นี่ (เลือกหลายไฟล์พร้อมกันได้)</small></p>
+    <div class="bar">
+      <button id="csvImportBtn">นำเข้าไฟล์คำตอบนักเรียน (CSV)</button>
+      <input type="file" id="csvImport" accept=".csv,text/csv" multiple hidden>
+    </div>
+    <div id="importMsg"></div>
+    <h3>ส่งออก</h3>
+    <div class="bar">
+      <button class="secondary" id="expSum">ตารางคะแนนสรุป (CSV)</button>
+      <button class="secondary" id="expDetail">คำตอบละเอียดทุกข้อ (CSV)</button>
+      <button class="secondary" id="expBackup">สำรองข้อมูลทั้งหมด (JSON)</button>
+    </div>
+    <h3>กู้คืน / ล้างข้อมูล</h3>
+    <div class="bar">
+      <button class="secondary" id="restoreBtn">กู้คืนจากไฟล์สำรอง (รวมกับข้อมูลเดิม)</button>
+      <input type="file" id="restore" accept=".json" hidden>
+      <button class="danger" id="wipe">ลบคำตอบนักเรียนทั้งหมด</button>
+    </div>
+    <p><small>ข้อมูลเก็บในเบราว์เซอร์ของเครื่องนี้ ควรกด "สำรองข้อมูลทั้งหมด" เป็นระยะ และอย่าล้างประวัติ/คุกกี้ของเบราว์เซอร์ระหว่างใช้งาน</small></p>
+  </div>
+
+  <div id="tab-set" class="panel" hidden>
+    <h2>ตั้งค่า</h2>
+    <h3>เปลี่ยนรหัสครู</h3>
+    <div class="bar">
+      <input id="pinOld" type="password" placeholder="รหัสปัจจุบัน" autocomplete="current-password">
+      <input id="pin1" type="password" placeholder="รหัสใหม่" autocomplete="new-password">
+      <input id="pin2" type="password" placeholder="ยืนยันรหัสใหม่" autocomplete="new-password">
+      <button id="pinSave">บันทึกรหัส</button>
+    </div>
+    <h3>การแสดงผลบนหน้านักเรียน</h3>
+    <label><input type="checkbox" id="showScore"> แสดงคะแนนให้นักเรียนเห็นทันทีหลังส่ง (ไม่แสดงเฉลยรายข้อ)</label>
+    <p><small>รหัสครูเก็บแบบเข้ารหัสในเครื่องนี้ และหน้านักเรียนไม่มีทางเข้าหน้าครู อย่างไรก็ตามข้อมูลยังอยู่ในเบราว์เซอร์ของเครื่อง จึงไม่ควรให้นักเรียนใช้เครื่องครูโดยไม่มีครูดูแล</small></p>
+  </div>
+</div>
+</main>
+<div id="toast" class="toast" role="status"></div>
+
+<script src="onet-core.js"></script>
+<script>
+if(typeof data==='undefined'){document.body.innerHTML='<p style="padding:20px;color:#b91c1c;font:bold 18px Tahoma">ไม่พบไฟล์ onet-core.js กรุณาวาง teacher.html ไว้ในโฟลเดอร์ SMART_ONET_2568 เดียวกับ index.html</p>';throw new Error('core missing')}
+
+/* ---------- เข้าสู่ระบบ ---------- */
+const SESSION='sonet68_teacher_session';
+let firstRun=!settings.pinHash;
+function loginUI(){
+  el('pinConfirm').hidden=!firstRun;
+  el('loginTitle').textContent=firstRun?'ตั้งรหัสครูครั้งแรก':'เข้าสู่ระบบครู';
+  el('loginDesc').innerHTML=firstRun?'<small>ยังไม่มีรหัสครูในเครื่องนี้ ตั้งรหัสอย่างน้อย 4 ตัว (จำไว้ให้ดี)</small>':'<small>กรอกรหัสครูเพื่อจัดการคะแนนและเฉลย</small>';
+  el('loginBtn').textContent=firstRun?'ตั้งรหัสและเข้าสู่ระบบ':'เข้าสู่ระบบ';
+}
+function enter(){try{sessionStorage.setItem(SESSION,settings.pinHash)}catch(e){}
+  el('login').hidden=true;el('teacher').hidden=false;el('conn').hidden=false;updateConn();renderTeacher()}
+function tryLogin(){
+  const a=el('pin').value;
+  if(firstRun){if(a.length<4)return showLoginErr('รหัสต้องมีอย่างน้อย 4 ตัว');if(a!==el('pinConfirm').value)return showLoginErr('รหัสทั้งสองช่องไม่ตรงกัน');
+    settings.pinHash=hashPin(a);store(LS.set,settings);firstRun=false;el('pin').value=el('pinConfirm').value='';return enter()}
+  if(hashPin(a)===settings.pinHash){el('pin').value='';el('loginErr').innerHTML='';enter()}
+  else{showLoginErr('รหัสไม่ถูกต้อง');el('pin').select()}
+}
+function showLoginErr(t){el('loginErr').innerHTML='<div class="msg err">'+esc(t)+'</div>'}
+el('loginBtn').onclick=tryLogin;['pin','pinConfirm'].forEach(id=>el(id).onkeydown=e=>{if(e.key==='Enter')tryLogin()});
+el('logout').onclick=()=>{try{sessionStorage.removeItem(SESSION)}catch(e){}location.reload()};
+
+/* ---------- สถานะการเชื่อมต่อกับหน้านักเรียน ---------- */
+let lastSync=new Date();
+function updateConn(){const ok=storageOK();el('dot').className='dot'+(ok?'':' off');
+  el('connText').textContent=ok?'เชื่อมกับหน้านักเรียนในเครื่องนี้ · คำตอบ '+subs.length+' รายการ · อัปเดต '+lastSync.toLocaleTimeString('th-TH'):'เบราว์เซอร์นี้บันทึกข้อมูลไม่ได้'}
+function reloadAll(){subs=load(LS.subs,[]);keyData=load(LS.key,{});settings=loadSettings();lastSync=new Date();updateConn()}
+/* เมื่อนักเรียนกดส่งในแท็บ/หน้าต่างอื่นของเครื่องนี้ ตารางจะอัปเดตเอง */
+window.addEventListener('storage',e=>{if(![LS.subs,LS.key,LS.set].includes(e.key))return;reloadAll();
+  if(e.key===LS.set&&!settings.pinHash){location.reload();return}
+  if(!el('teacher').hidden){if(e.key===LS.subs&&tab==='sum'){renderSummary();el('sumTable').classList.remove('live');void el('sumTable').offsetWidth;el('sumTable').classList.add('live');toast('มีคำตอบใหม่เข้ามา')}else renderTeacher()}});
+/* สำรอง: เผื่อเบราว์เซอร์ไม่ส่งสัญญาณ ตรวจซ้ำเมื่อกลับมาที่แท็บนี้ */
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!el('teacher').hidden){reloadAll();renderTeacher()}});
+
+/* ---------- แท็บ ---------- */
+let tab='sum';
+document.querySelectorAll('.tabs [data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;
+  document.querySelectorAll('.tabs [data-tab]').forEach(x=>x.classList.toggle('on',x===b));
+  ['sum','key','item','data','set'].forEach(t=>el('tab-'+t).hidden=t!==tab);renderTeacher()});
+function renderTeacher(){
+  if(tab==='sum')renderSummary();else if(tab==='key')renderKey();else if(tab==='item')renderItem();
+  else if(tab==='set')el('showScore').checked=settings.showScore}
+
+/* ---------- สรุปคะแนน ---------- */
+function students(){const m=new Map();
+  for(const x of subs){const k=studentKey(x);if(!m.has(k))m.set(k,{name:x.name,no:x.no,room:x.room,key:k,bySub:{}});m.get(k).bySub[x.subject]=x}
+  return[...m.values()].map(st=>{const out=data.map((d,si)=>st.bySub[d.name]?grade(si,st.bySub[d.name].answers):null);
+    const ps=out.filter(g=>g&&g.pct!=null).map(g=>g.pct);
+    return{...st,out,avg:ps.length?ps.reduce((a,b)=>a+b,0)/ps.length:null}})}
+const rooms=()=>[...new Set(subs.map(x=>x.room))].sort((a,b)=>a.localeCompare(b,'th',{numeric:true}));
+function fillRoom(sel){const v=sel.value;sel.innerHTML='<option value="">ทุกห้อง</option>'+rooms().map(r=>'<option>'+esc(r)+'</option>').join('');sel.value=rooms().includes(v)?v:''}
+const cmpRoom=(a,b)=>a.room.localeCompare(b.room,'th',{numeric:true})||(parseInt(a.no)||0)-(parseInt(b.no)||0)||a.name.localeCompare(b.name,'th');
+function filteredStudents(){
+  const room=el('sumRoom').value,qs=el('sumSearch').value.trim().toLowerCase(),sort=el('sumSort').value;
+  const list=students().filter(st=>(!room||st.room===room)&&(!qs||st.name.toLowerCase().includes(qs)||st.no===qs));
+  list.sort(sort==='avg'?(a,b)=>(b.avg??-1)-(a.avg??-1)||cmpRoom(a,b):sort==='name'?(a,b)=>a.name.localeCompare(b.name,'th'):cmpRoom);
+  return list;
+}
+const gradedCount=d=>(keyData[d.name]?.ans||[]).filter(a=>String(a).trim()).length;
+let openDetail=null;
+function renderSummary(){
+  fillRoom(el('sumRoom'));const list=filteredStudents();
+  const noKey=data.filter(d=>!gradedCount(d)).map(d=>d.name);
+  el('keyWarn').innerHTML=noKey.length?'<div class="msg err">ยังไม่มีเฉลยวิชา: '+noKey.map(esc).join(', ')+' — ไปที่แท็บ "เฉลย" แล้วกด "นำเข้าเฉลย"</div>':'';
+  const avgs=list.map(x=>x.avg).filter(v=>v!=null);
+  el('sumStats').innerHTML=[['นักเรียน',list.length+' คน'],['ส่งคำตอบรวม',list.reduce((a,x)=>a+Object.keys(x.bySub).length,0)+' วิชา'],
+    ['เฉลี่ยทุกวิชา',avgs.length?fmt(avgs.reduce((a,b)=>a+b,0)/avgs.length)+'%':'–'],['สูงสุด',avgs.length?fmt(Math.max(...avgs))+'%':'–'],['ต่ำสุด',avgs.length?fmt(Math.min(...avgs))+'%':'–']]
+    .map(([l,v])=>'<div class="stat"><small>'+l+'</small><strong>'+v+'</strong></div>').join('');
+  if(!list.length){el('sumTable').innerHTML='<tr><td>ยังไม่มีนักเรียนส่งคำตอบ'+(subs.length?'ที่ตรงกับตัวกรอง':' — เปิดหน้าสอบนักเรียนในเครื่องนี้ หรือนำเข้าไฟล์ CSV')+'</td></tr>';el('detail').innerHTML='';return}
+  let h='<thead><tr><th>#</th><th>ห้อง</th><th>เลขที่</th><th>ชื่อ-นามสกุล</th>'+data.map(d=>'<th class="num">'+esc(d.name)+'<br><small>(เต็ม '+d.full+')</small></th>').join('')+'<th class="num">เฉลี่ย %</th></tr></thead><tbody>';
+  list.forEach((st,i)=>{h+='<tr><td>'+(i+1)+'</td><td>'+esc(st.room)+'</td><td>'+esc(st.no)+'</td><td><button class="link" data-k="'+esc(st.key)+'">'+esc(st.name)+'</button></td>'+
+    st.out.map(g=>'<td class="num">'+(!g?'<span class="muted">ไม่ได้ส่ง</span>':g.g?'<strong>'+fmt(g.pts)+'</strong> <small>('+fmt(g.pct)+'%)</small>':'<span class="muted">ส่งแล้ว รอเฉลย</span>')+'</td>').join('')+
+    '<td class="num"><strong>'+fmt(st.avg)+'</strong></td></tr>'});
+  h+='</tbody><tfoot><tr><td colspan="4">เฉลี่ยของกลุ่ม (สูงสุด / ต่ำสุด)</td>'+data.map((d,si)=>{const ps=list.map(x=>x.out[si]).filter(g=>g&&g.pct!=null);
+    if(!ps.length)return'<td class="num">–</td>';const c=ps.map(g=>g.pts);return'<td class="num">'+fmt(c.reduce((a,b)=>a+b,0)/c.length)+'<br><small>('+fmt(Math.max(...c))+' / '+fmt(Math.min(...c))+') n='+ps.length+'</small></td>'}).join('')+
+    '<td class="num">'+(avgs.length?fmt(avgs.reduce((a,b)=>a+b,0)/avgs.length):'–')+'</td></tr></tfoot>';
+  el('sumTable').innerHTML=h;
+  el('sumTable').querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>renderDetail(b.dataset.k,true));
+  if(openDetail)renderDetail(openDetail,false);
+}
+function renderDetail(k,scroll){
+  const st=students().find(x=>x.key===k);openDetail=st?k:null;if(!st){el('detail').innerHTML='';return}
+  let h='<div class="panel" style="background:#f8fafc;margin-top:12px"><div class="bar" style="justify-content:space-between"><h3 style="margin:0">'+esc(st.name)+' · เลขที่ '+esc(st.no||'-')+' · '+esc(st.room)+'</h3><span class="bar noprint"><button class="secondary" id="detClose">ปิด</button><button class="danger" id="detDel">ลบนักเรียนคนนี้</button></span></div><small>เขียว = ถูก · เหลือง = ได้บางส่วน · แดง = ผิด (ชี้ที่ช่องเพื่อดูเฉลย)</small>';
+  data.forEach((d,si)=>{const sub=st.bySub[d.name];h+='<h4 style="margin:10px 0 4px">'+esc(d.name)+'</h4>';
+    if(!sub){h+='<small>ยังไม่ได้ส่ง</small>';return}const g=st.out[si];
+    h+='<small>ส่งเมื่อ '+esc(new Date(sub.time).toLocaleString('th-TH'))+(g.g?' · ได้ '+fmt(g.pts)+' / '+fmt(g.full)+' คะแนน (ถูกเต็มข้อ '+g.c+' / '+g.g+' ข้อ)':'')+'</small><div class="cells">'+
+      sub.answers.map((a,i)=>'<span class="cell '+(g.res[i]||'')+'" title="เฉลย: '+esc(showAns(d.qs[i],keyData[d.name]?.ans?.[i])||'-')+'"><b>'+(i+1)+'</b>'+(esc(showAns(d.qs[i],a))||'–')+'</span>').join('')+'</div>'});
+  el('detail').innerHTML=h+'</div>';
+  el('detClose').onclick=()=>{openDetail=null;el('detail').innerHTML=''};
+  el('detDel').onclick=()=>{if(!confirm('ลบคำตอบทุกวิชาของ '+st.name+' ?'))return;subs=load(LS.subs,[]).filter(x=>studentKey(x)!==k);store(LS.subs,subs);openDetail=null;el('detail').innerHTML='';updateConn();renderSummary();toast('ลบแล้ว')};
+  if(scroll)el('detail').scrollIntoView({behavior:'smooth'});
+}
+['sumRoom','sumSearch','sumSort'].forEach(id=>el(id).oninput=renderSummary);
+function summaryRows(list){const rows=[['ลำดับ','ห้อง','เลขที่','ชื่อ-นามสกุล',...data.flatMap(d=>[d.name+' (คะแนน)',d.name+' (เต็ม)',d.name+' (%)']),'เฉลี่ย (%)']];
+  list.forEach((st,i)=>rows.push([i+1,st.room,st.no,st.name,...st.out.flatMap(g=>g&&g.g?[fmt(g.pts),fmt(g.full),fmt(g.pct)]:[g?'รอเฉลย':'ไม่ได้ส่ง','','']),fmt(st.avg)]));return rows}
+el('sumCsv').onclick=()=>download('SMART_ONET_2568_คะแนน'+(el('sumRoom').value?'_'+safe(el('sumRoom').value):'')+'.csv',toCSV(summaryRows(filteredStudents())),'text/csv;charset=utf-8');
+
+/* ---------- เฉลย ---------- */
+function fillSubjects(sel){const v=sel.value;sel.innerHTML=data.map((d,i)=>'<option value="'+i+'">'+esc(d.name)+'</option>').join('');sel.value=v||'0'}
+function keyObj(si){const n=data[si].name;keyData[n]??={ans:[]};keyData[n].ans??=[];return keyData[n]}
+function saveKey(){store(LS.key,keyData);const d=data[+el('keySubject').value];el('keyCount').textContent='มีเฉลยแล้ว '+gradedCount(d)+' / '+d.count+' ข้อ'}
+const keyHint=qq=>qq.t==='c'?'1–'+qq.n:qq.t==='p2'?'เช่น 45':qq.t==='num'?'ตัวเลข':qq.opts===YN?'เช่น '+'12'.repeat(qq.subs.length).slice(0,qq.subs.length):'เช่น '+qq.opts.slice(0,qq.subs.length).join('');
+function renderKey(){
+  fillSubjects(el('keySubject'));const si=+el('keySubject').value,d=data[si],k=keyData[d.name]||{};
+  let h='<thead><tr><th>ข้อ</th><th>รูปแบบ</th><th class="num">คะแนน</th><th>เฉลย</th></tr></thead><tbody>';
+  d.qs.forEach((qq,i)=>{h+='<tr><td>'+(i+1)+'</td><td>'+typeName(qq)+(qq.t==='m'?' <small>('+qq.subs.join(', ')+')</small>':'')+'</td><td class="num">'+fmt(qq.pts)+'</td><td><input class="ka" data-i="'+i+'" size="12" placeholder="'+esc(keyHint(qq))+'" value="'+esc(k.ans?.[i]??'')+'"></td></tr>'});
+  el('keyTable').innerHTML=h+'</tbody>';
+  el('keyTable').querySelectorAll('.ka').forEach(x=>x.onchange=()=>{keyObj(si).ans[+x.dataset.i]=x.value.trim();saveKey()});
+  saveKey();
+}
+el('keySubject').onchange=renderKey;
+el('keyExport').onclick=()=>download('SMART_ONET_2568_เฉลย.json',JSON.stringify({type:'sonet68-key',keyData},null,1),'application/json');
+el('keyImportBtn').onclick=()=>el('keyImport').click();
+el('keyImport').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const j=JSON.parse(await readFile(f));const kd=j.keyData;if(!kd||typeof kd!=='object')throw 0;
+    const n=data.filter(d=>kd[d.name]?.ans?.some(a=>String(a).trim())).length;if(!n)throw 0;
+    if(data.some(gradedCount)&&!confirm('แทนที่เฉลยปัจจุบันด้วยเฉลยจากไฟล์?'))return;
+    data.forEach(d=>{if(kd[d.name]?.ans)keyData[d.name]={ans:kd[d.name].ans.map(a=>String(a??''))}});store(LS.key,keyData);renderKey();toast('นำเข้าเฉลยแล้ว '+n+' วิชา')}
+  catch(err){alert('ไฟล์เฉลยไม่ถูกต้อง')}};
+
+/* ---------- วิเคราะห์รายข้อ ---------- */
+function renderItem(){
+  fillSubjects(el('itemSubject'));fillRoom(el('itemRoom'));
+  const si=+el('itemSubject').value,room=el('itemRoom').value,d=data[si];
+  const list=subs.filter(x=>x.subject===d.name&&(!room||x.room===room));
+  if(!list.length){el('itemOut').innerHTML='<p>ยังไม่มีนักเรียนส่งวิชานี้</p>';return}
+  let h='<p>ผู้ส่ง '+list.length+' คน · % ตอบถูกนับเฉพาะผู้ที่ถูกเต็มข้อ · ข้อที่ถูกต่ำกว่า 20% ควรทบทวนเพิ่ม</p><div class="tablewrap"><table><thead><tr><th>ข้อ</th><th>เฉลย</th><th class="num">ถูกเต็มข้อ</th><th></th><th>คำตอบที่เลือกมากที่สุด</th><th class="num">ไม่ตอบ</th><th>ระดับ</th></tr></thead><tbody>';
+  d.qs.forEach((qq,i)=>{const key=String(keyData[d.name]?.ans?.[i]??'').trim(),cnt={};let blank=0,ok=0;
+    for(const x of list){const a=String(x.answers[i]??'').trim();if(!a){blank++;continue}const sa=showAns(qq,a);cnt[sa]=(cnt[sa]||0)+1;if(key&&scoreQ(qq,a,key)===1)ok++}
+    const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([a,c])=>esc(a)+' ('+c+')').join(', ')||'–';
+    const pct=key?ok/list.length*100:null,lv=pct==null?'':pct>=80?'ง่าย':pct>=50?'ปานกลาง':pct>=20?'ค่อนข้างยาก':'ยาก';
+    h+='<tr><td>'+(i+1)+'</td><td>'+(esc(showAns(qq,key))||'<span class="muted">ไม่มี</span>')+'</td><td class="num">'+(pct==null?'–':ok+' ('+fmt(pct)+'%)')+'</td><td>'+(pct==null?'':'<div class="barc"><i style="width:'+pct+'%"></i></div>')+'</td><td>'+top+'</td><td class="num">'+blank+'</td><td>'+lv+'</td></tr>'});
+  el('itemOut').innerHTML=h+'</tbody></table></div>';
+}
+el('itemSubject').onchange=renderItem;el('itemRoom').onchange=renderItem;
+
+/* ---------- นำเข้า / ส่งออก ---------- */
+function importStudentCSV(text){
+  const rows=parseCSV(text);if(!rows.length)throw new Error('ไฟล์ว่าง');
+  const h=rows[0].map(x=>x.trim()),ix=n=>h.indexOf(n);
+  const I={name:ix('ชื่อ'),no:ix('เลขที่'),room:ix('ห้อง'),sub:ix('วิชา'),q:ix('ข้อ'),a:ix('คำตอบ'),t:ix('เวลาส่ง')};
+  if([I.name,I.room,I.sub,I.q,I.a].some(v=>v<0))throw new Error('หัวตารางไม่ใช่ไฟล์คำตอบของระบบนี้');
+  const groups={};let noName=0;
+  for(const r of rows.slice(1)){
+    const si=data.findIndex(d=>d.name===(r[I.sub]||'').trim());if(si<0)continue;
+    const qn=parseInt(r[I.q],10);if(!(qn>=1&&qn<=data[si].count))continue;
+    const o={name:(r[I.name]||'').trim(),no:I.no>=0?(r[I.no]||'').trim():'',room:(r[I.room]||'').trim()};
+    if(!o.name){if((r[I.a]||'').trim())noName++;continue}
+    const k=studentKey(o)+'|'+si;
+    groups[k]??={...o,subject:data[si].name,answers:Array(data[si].count).fill(''),time:''};
+    groups[k].answers[qn-1]=(r[I.a]||'').trim();if(I.t>=0&&r[I.t])groups[k].time=r[I.t];
+  }
+  let n=0;for(const g of Object.values(groups)){if(!g.answers.some(Boolean))continue;if(!g.time)g.time=new Date().toISOString();n+=mergeSub(g)}
+  return{n,noName};
+}
+el('csvImportBtn').onclick=()=>el('csvImport').click();
+el('csvImport').onchange=async e=>{const files=[...e.target.files];e.target.value='';if(!files.length)return;
+  subs=load(LS.subs,[]);let total=0,noName=0;const errs=[];
+  for(const f of files){try{const r=importStudentCSV(await readFile(f));total+=r.n;noName+=r.noName}catch(err){errs.push(esc(f.name)+': '+esc(err.message))}}
+  store(LS.subs,subs);updateConn();
+  el('importMsg').innerHTML='<div class="msg '+(errs.length?'err':'ok')+'">นำเข้า '+files.length+' ไฟล์ ได้คำตอบ '+total+' รายการ (นักเรียน×วิชา)'+(noName?'<br>ข้ามคำตอบที่ไม่มีชื่อนักเรียน '+noName+' ข้อ':'')+(errs.length?'<br>'+errs.join('<br>'):'')+'</div>';
+};
+el('expSum').onclick=()=>download('SMART_ONET_2568_คะแนนทั้งหมด.csv',toCSV(summaryRows(students().sort(cmpRoom))),'text/csv;charset=utf-8');
+el('expDetail').onclick=()=>download('SMART_ONET_2568_คำตอบทั้งหมด.csv',toCSV(answerRows(subs)),'text/csv;charset=utf-8');
+el('expBackup').onclick=()=>{const d=new Date().toISOString().slice(0,10);
+  download('SMART_ONET_2568_สำรอง_'+d+'.json',JSON.stringify({type:'sonet68-backup',exported:new Date().toISOString(),subs,keyData},null,1),'application/json')};
+el('restoreBtn').onclick=()=>el('restore').click();
+el('restore').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const j=JSON.parse(await readFile(f));if(!Array.isArray(j.subs))throw 0;
+    subs=load(LS.subs,[]);let n=0;j.subs.forEach(x=>{if(x&&x.name&&x.subject&&Array.isArray(x.answers))n+=mergeSub(x)});store(LS.subs,subs);
+    if(j.keyData&&Object.keys(j.keyData).length&&confirm('ไฟล์นี้มีเฉลยด้วย ต้องการแทนที่เฉลยปัจจุบันหรือไม่?')){keyData=j.keyData;store(LS.key,keyData)}
+    updateConn();el('importMsg').innerHTML='<div class="msg ok">กู้คืนแล้ว '+n+' รายการ</div>';toast('กู้คืนข้อมูลแล้ว')}
+  catch(err){alert('ไฟล์สำรองไม่ถูกต้อง')}};
+el('wipe').onclick=()=>{subs=load(LS.subs,[]);if(!subs.length)return toast('ไม่มีข้อมูลให้ลบ');
+  if(!confirm('ลบคำตอบของนักเรียนทั้งหมด '+subs.length+' รายการ?\nควรสำรองข้อมูลก่อน'))return;
+  if(prompt('พิมพ์คำว่า ลบ เพื่อยืนยัน')!=='ลบ')return;subs=[];store(LS.subs,subs);updateConn();toast('ลบข้อมูลแล้ว')};
+
+/* ---------- ตั้งค่า ---------- */
+el('pinSave').onclick=()=>{
+  if(hashPin(el('pinOld').value)!==settings.pinHash)return alert('รหัสปัจจุบันไม่ถูกต้อง');
+  const a=el('pin1').value,b=el('pin2').value;
+  if(a.length<4)return alert('รหัสต้องมีอย่างน้อย 4 ตัว');if(a!==b)return alert('รหัสใหม่ทั้งสองช่องไม่ตรงกัน');
+  settings=loadSettings();settings.pinHash=hashPin(a);store(LS.set,settings);try{sessionStorage.setItem(SESSION,settings.pinHash)}catch(e){}
+  el('pinOld').value=el('pin1').value=el('pin2').value='';toast('เปลี่ยนรหัสแล้ว')};
+el('showScore').onchange=()=>{settings=loadSettings();settings.showScore=el('showScore').checked;store(LS.set,settings);toast(settings.showScore?'หน้านักเรียนจะแสดงคะแนนหลังส่ง':'หน้านักเรียนจะไม่แสดงคะแนน')};
+
+/* ---------- เริ่มต้น ---------- */
+loginUI();
+let sess=null;try{sess=sessionStorage.getItem(SESSION)}catch(e){}
+if(!firstRun&&sess&&sess===settings.pinHash)enter();else el('pin').focus();
+</script>
+</body>
+</html>
